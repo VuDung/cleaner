@@ -5,13 +5,23 @@ import android.arch.lifecycle.ViewModel
 import android.arch.lifecycle.ViewModelProvider
 import android.arch.lifecycle.ViewModelProviders
 import android.support.v4.app.FragmentActivity
+import com.century.cleaner.data.repository.CleanerRepository
 import com.century.cleaner.feature.cleaner.CleanerViewModel
 import dagger.Module
 import dagger.Provides
 
 @Module
-class ActivityModule(private val activity: FragmentActivity){
+class ActivityModule {
 
-  @Provides fun viewModelFactory() = ViewModelProviders.of(activity)
-  @Provides fun cleanerViewModel() = ViewModelProviders.of(activity).get(CleanerViewModel::class.java)
+  @Provides
+  fun viewModelFactory(cleanerRepository: CleanerRepository) = object : ViewModelProvider.Factory {
+    override fun <T : ViewModel?> create(modelClass: Class<T>): T {
+      if (modelClass.isAssignableFrom(CleanerViewModel::class.java)) {
+        @Suppress("UNCHECKED_CAST")
+        return CleanerViewModel(cleanerRepository) as T
+      }
+      throw IllegalAccessException("unknown viewmodel $modelClass")
+    }
+  }
+
 }

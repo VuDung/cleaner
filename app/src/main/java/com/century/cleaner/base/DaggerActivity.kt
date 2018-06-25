@@ -6,5 +6,5 @@ import com.century.incoming.daggers.HasScope
 
 abstract class DaggerActivity : AppCompatActivity(), HasScope{
 
-  override fun module() = ActivityModule(this)
+  override fun module() = ActivityModule()
 }

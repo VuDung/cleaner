@@ -1,6 +1,8 @@
 package com.century.cleaner.feature.cleaner
 
+import android.arch.lifecycle.Observer
 import android.arch.lifecycle.ViewModelProvider
+import android.arch.lifecycle.ViewModelProviders
 import android.os.Bundle
 import android.support.v4.app.Fragment
 import android.view.LayoutInflater
@@ -12,9 +14,10 @@ import timber.log.Timber
 import javax.inject.Inject
 
 class FragmentCleaner : Fragment(){
-  @Inject lateinit var modelProvider: ViewModelProvider
-  private val model: CleanerViewModel by lazy {
-    modelProvider.get(CleanerViewModel::class.java)
+  @Inject lateinit var viewModelFactory: ViewModelProvider.Factory
+  private val viewModel: CleanerViewModel by lazy {
+    ViewModelProviders.of(this, viewModelFactory)
+        .get(CleanerViewModel::class.java)
   }
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -28,21 +31,24 @@ class FragmentCleaner : Fragment(){
 
   override fun onActivityCreated(savedInstanceState: Bundle?) {
     super.onActivityCreated(savedInstanceState)
-    model.states.subscribe {
-      state ->
-      when(state){
-        is State.InProgress -> {
-          model.counts.subscribe { counts -> Timber.i("progress %d/%d", counts[0], counts[1]) }
-          model.totalCache.subscribe { t: Long? -> Timber.i("Scan cache %d", t) }
-        }
-        is State.Success -> {
-          model.cacheInfos.subscribe { it -> Timber.i("app cache size %d", it.size) }
-        }
-        is State.Failure -> {
-          model.states.subscribe { failer -> Timber.i("Failed", failer) }
-        }
-      }
-
-    }
+//    viewModel.states.subscribe {
+//      state ->
+//      when(state){
+//        is State.InProgress -> {
+//          viewModel.counts.subscribe { counts -> Timber.i("progress %d/%d", counts[0], counts[1]) }
+//          viewModel.totalCache.subscribe { t: Long? -> Timber.i("Scan cache %d", t) }
+//        }
+//        is State.Success -> {
+//          viewModel.cacheInfos.subscribe { it -> Timber.i("app cache size %d", it.size) }
+//        }
+//        is State.Failure -> {
+//          viewModel.states.subscribe { failer -> Timber.i("Failed", failer) }
+//        }
+//      }
+//
+//    }
+    viewModel.infoLive.observe(this, Observer {
+      Timber.i("count ${it?.count} size ${it?.totalBytes}")
+    })
   }
 }
