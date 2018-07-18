@@ -3,6 +3,7 @@ package com.century.cleaner.data.repository
 import android.app.usage.StorageStatsManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.IPackageDataObserver
 import android.content.pm.IPackageStatsObserver
 import android.content.pm.PackageManager
 import android.content.pm.PackageStats
@@ -15,60 +16,74 @@ import com.century.cleaner.util.extension.isStatAccessPermissionGranted
 import com.century.cleaner.util.rx.SchedulerProvider
 import io.reactivex.Flowable
 import io.reactivex.android.schedulers.AndroidSchedulers
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import javax.inject.Inject
 
 class CleanerRepositoryImplement @Inject constructor(
-    private val context: Context,
-    private val schedules: SchedulerProvider) : CleanerRepository {
+  private val context: Context,
+  private val schedules: SchedulerProvider) : CleanerRepository {
 
-  private var getPackageSizeInfoMethod: Method? = null
-  override fun loadCaches() :Flowable<TotalCache>{
+  private lateinit var getPackageSizeInfoMethod: Method
+  private lateinit var freeStorageAndNotifyMethod: Method
+
+  init {
+    try {
+      getPackageSizeInfoMethod = context.packageManager.javaClass.getMethod("getPackageSizeInfo", String::class.java, IPackageStatsObserver::class.java)
+      freeStorageAndNotifyMethod = context.packageManager.javaClass.getMethod("freeStorageAndNotify", Long::class.java, IPackageDataObserver::class.java)
+    } catch (e: NoSuchMethodException) {
+      e.printStackTrace()
+    }
+  }
+
+  override fun loadCaches(): Flowable<TotalCache> {
     val totalCache: Long = 0L
     val cacheInfos = mutableListOf<SingleCache>()
     val list = context.packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
     val totalCount = list.size
     return Flowable.fromIterable(list)
-        .flatMap { appInfo ->
-            if (hasO() && context.isStatAccessPermissionGranted()) {
-              Flowable.just(getInfoO(appInfo, cacheInfos, totalCache, totalCount))
-            } else {
-              Flowable.fromPublisher<TotalCache> {subscriber ->
-                getPackageSizeInfoMethod?.invoke(context.packageManager, appInfo.packageName,
-                    object : IPackageStatsObserver.Stub() {
+      .flatMap { appInfo ->
+        if (hasO() && context.isStatAccessPermissionGranted()) {
+          Flowable.just(getInfoO(appInfo, cacheInfos, totalCache, totalCount))
+        } else {
+          Flowable.fromPublisher<TotalCache> { subscriber ->
+            try {
+              getPackageSizeInfoMethod.invoke(context.packageManager, appInfo.packageName,
+                object : IPackageStatsObserver.Stub() {
 
-                      @Suppress("DEPRECATION")
-                      override fun onGetStatsCompleted(pStats: PackageStats?, succeeded: Boolean) {
-                        if (succeeded && (pStats?.cacheSize!! > 0L)) {
-                          val packageManager = context.packageManager
-                          val cacheInfo = SingleCache(
-                              packageManager.getApplicationLabel(appInfo).toString(),
-                              pStats.packageName,
-                              pStats.cacheSize)
-                          cacheInfos.add(cacheInfo)
-                          totalCache.plus(pStats.cacheSize)
+                  @Suppress("DEPRECATION")
+                  override fun onGetStatsCompleted(pStats: PackageStats?, succeeded: Boolean) {
+                    if (succeeded && (pStats?.cacheSize!! > 0L)) {
+                      val packageManager = context.packageManager
+                      val cacheInfo = SingleCache(
+                        packageManager.getApplicationLabel(appInfo).toString(),
+                        pStats.packageName,
+                        pStats.cacheSize)
+                      cacheInfos.add(cacheInfo)
+                      totalCache.plus(pStats.cacheSize)
 
-                          subscriber.onNext(TotalCache(1, listOf(cacheInfo), pStats.cacheSize, totalCount))
-                          subscriber.onComplete()
-                        }
-                      }
-                    })
-              }
-
+                      subscriber.onNext(TotalCache(1, pStats.packageName, listOf(cacheInfo), pStats.cacheSize, totalCount))
+                      subscriber.onComplete()
+                    }
+                  }
+                })
+            }catch (e: InvocationTargetException){
+              subscriber.onError(e)
             }
+          }
         }
-        .scan { acc: TotalCache, info: TotalCache ->
-          TotalCache(
-              acc.count + info.count,
-              acc.singleCaches + info.singleCaches,
-              acc.totalBytes + info.totalBytes,
-            acc.totalCount
-          )
-        }
-        .subscribeOn(schedules.io())
-        .observeOn(AndroidSchedulers.mainThread())
-
-
+      }
+      .scan { acc: TotalCache, info: TotalCache ->
+        TotalCache(
+          acc.currentCount + info.currentCount,
+          info.currentPackage,
+          acc.singleCaches + info.singleCaches,
+          acc.totalBytes + info.totalBytes,
+          acc.totalCount
+        )
+      }
+      .subscribeOn(schedules.io())
+      .observeOn(AndroidSchedulers.mainThread())
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
@@ -77,22 +92,20 @@ class CleanerRepositoryImplement @Inject constructor(
                        totalCache: Long,
                        totalCount: Int): TotalCache {
     val storageStatsManager = context.getSystemService(
-        Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+      Context.STORAGE_STATS_SERVICE) as StorageStatsManager
     //val storageManager = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
     val storageStats = storageStatsManager.queryStatsForUid(appInfo.storageUuid, appInfo.uid)
     val packageManager = context.packageManager
     val cacheInfo = SingleCache(
-        packageManager.getApplicationLabel(appInfo).toString(),
-        appInfo.packageName,
-        storageStats.cacheBytes)
+      packageManager.getApplicationLabel(appInfo).toString(),
+      appInfo.packageName,
+      storageStats.cacheBytes)
     singleCaches.add(cacheInfo)
     totalCache.plus(storageStats.cacheBytes)
 
-    return TotalCache(1, listOf(cacheInfo), storageStats.cacheBytes, totalCount)
+    return TotalCache(1, appInfo.packageName, listOf(cacheInfo), storageStats.cacheBytes, totalCount)
   }
 
   override fun clearCaches() {
-
   }
-
 }

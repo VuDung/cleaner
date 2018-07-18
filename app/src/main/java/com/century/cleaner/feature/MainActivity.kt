@@ -1,6 +1,10 @@
 package com.century.cleaner.feature
 
+import android.content.DialogInterface
+import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
+import android.support.v7.app.AlertDialog
 import android.support.v7.widget.Toolbar
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -13,6 +17,8 @@ import com.century.cleaner.feature.cleaner.CleanerActivity
 import com.century.cleaner.feature.widget.PercentageView
 import com.century.cleaner.util.MemoryUtils
 import com.century.cleaner.util.StorageUtils
+import com.century.cleaner.util.extension.hasStatAccessOption
+import com.century.cleaner.util.extension.isStatAccessPermissionGranted
 import com.century.cleaner.util.extension.onClick
 import com.century.cleaner.util.extension.setTextColorSpan
 import com.century.cleaner.util.extension.start
@@ -72,5 +78,19 @@ class MainActivity : DaggerActivity() {
     booster.onClick { start<BoosterActivity>() }
     apps.onClick { start<AppManagerActivity>() }
     battery.onClick { start<BatteryActivity>() }
+
+    if(!isStatAccessPermissionGranted() && hasStatAccessOption()){
+      val builder = AlertDialog.Builder(this)
+      builder.apply {
+        setTitle(getString(R.string.dialog_android_8_detected))
+        setMessage(getString(R.string.dialog_android_8_detected_msg))
+        setPositiveButton(getString(R.string.dialog_grant_permission)) { _, _ ->
+          startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+        setNegativeButton(getString(R.string.dialog_not_now), null)
+      }
+      builder.create().show()
+
+    }
   }
 }

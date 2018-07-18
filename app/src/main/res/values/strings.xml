@@ -1,3 +1,9 @@
 <resources>
   <string name="app_name">Cleaner</string>
+
+  <!-- Dialog -->
+  <string name="dialog_android_8_detected">Android 8 Detected</string>
+  <string name="dialog_android_8_detected_msg">To enable the most important features of this app. Such as junk and app analysis, we need your additional permission to use system App Usage Stats. This is due to changes make in Android 8.</string>
+  <string name="dialog_not_now">Not Now</string>
+  <string name="dialog_grant_permission">Grant Permission</string>
 </resources>
